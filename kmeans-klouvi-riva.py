@@ -4,10 +4,42 @@ import sys
 
 from pyspark.sql import SparkSession
 
-from helper import computeDistance, moyenneList, sumList, closestCluster, log, getLog
+
+LogBuffer = []
+
+def computeDistance(x,y):
+    return sqrt(sum([(a - b)**2 for a,b in zip(x,y)]))
 
 
-def advancedKmeans(sc, data, nb_clusters):
+def closestCluster(dist_list):
+    cluster = dist_list[0][0]
+    min_dist = dist_list[0][1]
+    for elem in dist_list:
+        if elem[1] < min_dist:
+            cluster = elem[0]
+            min_dist = elem[1]
+    return (cluster,min_dist)
+
+def sumList(x,y):
+    return [x[i]+y[i] for i in range(len(x))]
+
+def moyenneList(x,n):
+    return [x[i]/n for i in range(len(x))]
+
+
+def log(x):
+    LogBuffer.append(x)
+
+
+def logTitle(x):
+    log("============== {} ==============".format(x))
+
+
+def getLog():
+    return LogBuffer
+
+
+def advancedKmeans(sc, data, nb_clusters, maxSteps):
     clusteringDone = False
     number_of_steps = 0
     current_error = float("inf")
@@ -73,7 +105,7 @@ def advancedKmeans(sc, data, nb_clusters):
                                     .count()
         else:
             switch = 150
-        if switch == 0 or number_of_steps == 100:
+        if switch == 0 or number_of_steps == maxSteps:
             clusteringDone = True
             error = sqrt(min_dist.map(lambda x: x[1][1]).reduce(lambda x,y: x + y))/nb_elem.value
         else:
@@ -98,9 +130,9 @@ if __name__ == "__main__":
     # zipWithIndex allows us to give a specific index to each point
     # (0, [5.1, 3.5, 1.4, 0.2, 'Iris-setosa'])
 
-    clustering = advancedKmeans(sc, data, 3)
+    clustering = advancedKmeans(sc, data, 3, 1)
 
-    outputPath = "{}/../kmeans_python_output".format(input_file)
+    outputPath = "{}/../kmeans_python_cluster".format(input_file)
     metricsPath = "{}/../kmeans_python_metrics".format(input_file)
 
     log("clusters path: {}".format(outputPath))

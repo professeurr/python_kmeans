@@ -7,7 +7,7 @@ hdfs dfs -rm -f -r $clustering_output
 hdfs dfs -rm -f -r $clustering_metrics
 
 spark-submit\
-  --master yarn --deploy-mode client \
+  --master yarn --deploy-mode cluster \
   --executor-cores 1 \
   --num-executors 1 \
   --executor-memory 1g \
