@@ -53,7 +53,7 @@ def getLog():
     return LogBuffer
 
 
-def advancedKmeans(sc, inputs, nb_clusters, maxSteps, seed):
+def advancedKmeans(sc, inputs, nb_clusters, max_steps, max_partitions, seed):
     clusteringDone = False
     number_of_steps = 1
     prev_assignment, assignment = None, None
@@ -91,6 +91,8 @@ def advancedKmeans(sc, inputs, nb_clusters, maxSteps, seed):
         joined = data.cartesian(centroids)
         # ((0, [5.1, 3.5, 1.4, 0.2, 'Iris-setosa']), (0, [4.4, 3.0, 1.3, 0.2]))
 
+        joined = joined.coalesce(numPartitions=max_partitions)
+
         # We compute the distance between the points and each cluster
         dist = joined.map(lambda x: (x[0][0], ((x[1][0], computeDistance(x[0][1], x[1][1])), x[0][1])))
         # (0, (0, 0.866025403784438))
@@ -124,7 +126,7 @@ def advancedKmeans(sc, inputs, nb_clusters, maxSteps, seed):
             switch = nb_elem.value
         log("switch: {}".format(switch))
 
-        if switch == 0 or number_of_steps == maxSteps:
+        if switch == 0 or number_of_steps == max_steps:
             clusteringDone = True
             error = sqrt(count.map(lambda x: x[1][2]).reduce(lambda x, y: x + y)) / nb_elem.value
         else:
@@ -132,7 +134,9 @@ def advancedKmeans(sc, inputs, nb_clusters, maxSteps, seed):
             prev_assignment = assignment
             number_of_steps += 1
 
-    return (assignment, error, number_of_steps)
+    cluster = assignment.join(labels).map(lambda x: (x[0], (x[1][0][0], (x[1][0][1][0], x[1][0][1][1], x[1][0][1][2], x[1][0][1][3], x[1][1]))))
+
+    return cluster, error, number_of_steps
 
 
 if __name__ == "__main__":
@@ -151,7 +155,7 @@ if __name__ == "__main__":
     lines = sc.textFile(input_file)
     data = lines.map(lambda x: split_line(x)).zipWithIndex()
 
-    clustering = advancedKmeans(sc, data, nb_clusters, max_partitions, seed)
+    clustering = advancedKmeans(sc, data, nb_clusters, max_steps, max_partitions, seed)
 
     duration = (time.time() - start_time)
     outputPath = "{}/../kmeans_python_cluster".format(input_file)
@@ -163,7 +167,7 @@ if __name__ == "__main__":
     log("number of steps: {}".format(clustering[2]))
     log("duration: {} s".format(duration))
 
-    clustering[0].coalesce(1).saveAsTextFile(outputPath)
+    clustering[0].sortBy(lambda x: x[1][0][0]).coalesce(1).saveAsTextFile(outputPath)
 
     metrics = sc.parallelize(getLog())
     metrics.coalesce(1).saveAsTextFile(metricsPath)

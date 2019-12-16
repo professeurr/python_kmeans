@@ -9,7 +9,7 @@ hdfs dfs -rm -f -r $clustering_metrics
 spark-submit\
   --master yarn --deploy-mode cluster \
   --executor-cores 4 \
-  --num-executors 1 \
+  --num-executors 10 \
   --executor-memory 1g \
   --conf spark.yarn.executor.memoryOverhead=1g \
   --conf spark.driver.memory=1g \
