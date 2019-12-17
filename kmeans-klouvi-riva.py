@@ -45,7 +45,7 @@ def get_log():
     return LogBuffer
 
 
-def advanced_kmeans(sc, inputs, nb_clusters, max_steps, max_partitions, seed):
+def advanced_kmeans(sc, inputs, max_steps, max_partitions, seed):
     clustering_done = False
     number_of_steps = 1
     prev_assignment, assignment, clusters = None, None, None
@@ -61,6 +61,10 @@ def advanced_kmeans(sc, inputs, nb_clusters, max_steps, max_partitions, seed):
     #############################
     # Select initial centroids #
     #############################
+
+    data_labels = inputs.map(lambda x: (x[1], x[0][1]))  # (0,Iris-setosa)
+    nb_clusters = data_labels.map(lambda x: (x[1], x[0])).reduceByKey(lambda x, y : 1).count()
+    log("Number of clusters: {} ".format(clusters))
 
     centroid = sc.parallelize(data_points.takeSample('withoutReplacment', nb_clusters, seed)) \
         .zipWithIndex() \
@@ -125,7 +129,6 @@ def advanced_kmeans(sc, inputs, nb_clusters, max_steps, max_partitions, seed):
             number_of_steps += 1
 
     log("Setting up the cluster labels")
-    data_labels = inputs.map(lambda x: (x[1], x[0][1]))  # (0,Iris-setosa)
     cluster = assignment.join(data_labels).map(lambda x: (x[0], (x[1][0][0],
                                                                  (x[1][0][1][0], x[1][0][1][1], x[1][0][1][2],
                                                                   x[1][0][1][3], x[1][1]))))
@@ -146,7 +149,6 @@ if __name__ == "__main__":
 
     input_file = sys.argv[1]
     partitions = 1
-    cluster_size = 3
     steps = 100
     rand_seed = 42
     start_time = time.time()
@@ -154,7 +156,7 @@ if __name__ == "__main__":
     lines = spark.sparkContext.textFile(input_file)
     data = lines.map(lambda x: split_line(x)).zipWithIndex()
 
-    clustering = advanced_kmeans(spark.sparkContext, data, cluster_size, steps, partitions, rand_seed)
+    clustering = advanced_kmeans(spark.sparkContext, data, steps, partitions, rand_seed)
 
     duration = (time.time() - start_time)
     outputPath = "{}/../kmeans_python_cluster".format(input_file)
