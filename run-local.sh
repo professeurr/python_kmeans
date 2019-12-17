@@ -8,12 +8,15 @@ hdfs dfs -rm -f -r $clustering_metrics
 
 spark-submit\
   --master yarn --deploy-mode cluster \
-  --executor-cores 1 \
-  --num-executors 2 \
+  --executor-cores 2 \
+  --num-executors 8 \
   --executor-memory 1g \
-  --conf spark.yarn.executor.memoryOverhead=1g \
+  --conf spark.executor.memoryOverhead=1g \
   --conf spark.driver.memory=1g \
   --conf spark.driver.cores=1 \
+  --conf spark.logConf=true \
+  --conf "spark.executor.extraJavaOptions=-Dlog4j.configuration=/home/masterai/dev/master_iasd/bigdata/project/python_kmean/log4j.properties"\
+  --conf "spark.driver.extraJavaOptions=-Dlog4j.configuration=/home/masterai/dev/master_iasd/bigdata/project/python_kmean/log4j.properties"\
   $1 $2
 
 
