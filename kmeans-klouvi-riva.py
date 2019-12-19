@@ -4,7 +4,6 @@ import sys
 import time
 
 from pyspark.sql import SparkSession
-from pyspark import SparkConf
 
 
 def compute_distance(x, y):
@@ -63,9 +62,10 @@ def advanced_kmeans(sc, inputs, max_steps, max_partitions, seed):
     #############################
 
     data_labels = inputs.map(lambda x: (x[1], x[0][1]))  # (0,Iris-setosa)
-    nb_clusters = data_labels.map(lambda x: (x[1], x[0])).reduceByKey(lambda x, y : 1).count()
-    log("Number of clusters: {} ".format(clusters))
+    nb_clusters = data_labels.map(lambda x: (x[1], x[0])).reduceByKey(lambda x, y: 1).count()
+    log("Number of clusters: {} ".format(nb_clusters))
 
+    # Select initial centroids and compute their indices
     centroid = sc.parallelize(data_points.takeSample('withoutReplacment', nb_clusters, seed)) \
         .zipWithIndex() \
         .map(lambda x: (x[1], x[0][1]))
@@ -73,40 +73,52 @@ def advanced_kmeans(sc, inputs, max_steps, max_partitions, seed):
     log_rdd('centroids', centroid)
 
     while not clustering_done:
-
         log_title("Step {}".format(number_of_steps))
+
         #############################
         # Assign points to clusters #
         #############################
 
         joined = data_points.cartesian(centroid)
+        log_rdd("joined ", joined)
         log_partition("joined ", joined)
 
+        # Reduce number of partitions
         joined = joined.coalesce(numPartitions=max_partitions)
         log_partition("joined after coalesce()", joined)
 
         # We compute the distance between the points and each cluster
+        # Append also the data point to the distance list to avoid the later join()
+        # that way we reduce significantly the number of shuffles (data transfer across nodes)
         dist = joined.map(lambda x: (x[0][0], ((x[1][0], compute_distance(x[0][1], x[1][1])), x[0][1])))
-        # (0, (0, 0.866025403784438))
+        # (0, ((0, 2.882707061079915), [5.1, 3.5, 1.4, 0.2]))
         log_rdd("dist", dist)
         log_partition("dist", dist)
 
         # assignment will be our return value : It contains the datapoint,
         # the id of the closest cluster and the distance of the point to the centroid
         assignment = dist.reduceByKey(lambda x, y: x if (x[0][1] < y[0][1]) else y)
+        #  (19, ( (2, 0.6855654600401041), Array(5.1, 3.8, 1.5, 0.3) ) )
+        log_rdd("assignment", assignment)
         log_partition("assignment", assignment)
-        # (0, ((2, 0.5385164807134504), [5.1, 3.5, 1.4, 0.2, 'Iris-setosa']))
 
         ############################################
         # Compute the new centroid of each cluster #
         ############################################
 
+        # Prepare the data points for the counting and summation operations
         clusters = assignment.map(lambda z: (z[1][0][0], (1, z[1][1], z[1][0][1])))
+        # (0, (1, [5.1, 3.5, 1.4, 0.2], 2.882707061079915))
         log_rdd("clusters", clusters)
+        log_partition("clusters", clusters)
 
         count = clusters.reduceByKey(lambda x, y: (x[0] + y[0], sum_list(x[1], y[1]), x[2] + y[2]))
+        # (0, (64, [325.3, 205.10000000000005, 125.2, 28.500000000000004], 150.41642156981126))
+        log_rdd("count", count)
 
+        # Compute the new centroids
         centroid = count.map(lambda x: (x[0], mean_list(x[1][1], x[1][0])))
+        # (0, Array(6.301030927835052, 2.8865979381443303, 4.958762886597938, 1.6958762886597938))
         log_rdd("current centroids", centroid)
         log_partition("current centroids", centroid)
 
@@ -137,19 +149,19 @@ def advanced_kmeans(sc, inputs, max_steps, max_partitions, seed):
 
 
 if __name__ == "__main__":
-
     LogBuffer = []
-    debug = False
+    debug = True
 
-    spark = SparkSession.builder\
+    spark = SparkSession.builder \
         .appName('KMeans_Python_Klouvi_Riva_{}'.format(random.randint(0, 1000000))) \
         .config("spark.logConf", "true") \
         .config("spark.logLevel", "OFF") \
         .getOrCreate()
 
+    # read the data points file
     input_file = sys.argv[1]
     partitions = 1
-    steps = 100
+    steps = 1
     rand_seed = 42
     start_time = time.time()
 

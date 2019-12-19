@@ -4,6 +4,7 @@
 from pyspark import SparkContext, SparkConf
 from math import sqrt
 
+
 def computeDistance(x,y):
     return sqrt(sum([(a - b)**2 for a,b in zip(x,y)]))
 
@@ -17,11 +18,14 @@ def closestCluster(dist_list):
             min_dist = elem[1]
     return (cluster,min_dist)
 
+
 def sumList(x,y):
     return [x[i]+y[i] for i in range(len(x))]
 
+
 def moyenneList(x,n):
     return [x[i]/n for i in range(len(x))]
+
 
 def simpleKmeans(data, nb_clusters):
     clusteringDone = False
